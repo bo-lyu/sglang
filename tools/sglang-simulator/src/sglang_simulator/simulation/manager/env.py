@@ -50,8 +50,3 @@ class Envs:
         ).upper()
         assert SGLANG_SIMULATOR_OUTPUT_MODE in ("BLOCKING", "OFFLINE")
         return SGLANG_SIMULATOR_OUTPUT_MODE
-
-    @classmethod
-    def num_warmup(cls) -> int:
-        """Return the number of initial requests excluded from profile metrics."""
-        return int(os.getenv("SGLANG_SIMULATOR_NUM_WARMUP", "0"))

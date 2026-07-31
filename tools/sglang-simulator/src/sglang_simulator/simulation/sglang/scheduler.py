@@ -567,14 +567,7 @@ class C_SchedulerHook(BaseHook):
             os.makedirs(output_dir, exist_ok=True)
 
             if len(stats) > 0:
-                # Remove warmup requests.
-                num_warmup_requests = Envs.num_warmup()
-                if len(stats) > num_warmup_requests:
-                    metrics_stats = stats[num_warmup_requests:]
-                else:
-                    metrics_stats = stats
-
-                min_created_time = metrics_stats[0].created_time
+                min_created_time = stats[0].created_time
                 # Align timestamps
                 for item in stats:
                     item.created_time -= min_created_time
@@ -582,7 +575,7 @@ class C_SchedulerHook(BaseHook):
                     item.queue_end -= min_created_time
                     item.last_event_time -= min_created_time
 
-                metrics = calc_metrics(metrics_stats)
+                metrics = calc_metrics(stats)
                 metrics["time_cost"] = (
                     time.time() - StateManager.get_last_flush_time_ts()
                 )
