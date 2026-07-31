@@ -568,8 +568,9 @@ class C_SchedulerHook(BaseHook):
 
             if len(stats) > 0:
                 # Remove warmup requests.
-                if len(stats) > Envs.num_warmup():
-                    metrics_stats = stats[Envs.num_warmup() :]
+                num_warmup_requests = Envs.num_warmup()
+                if len(stats) > num_warmup_requests:
+                    metrics_stats = stats[num_warmup_requests:]
                 else:
                     metrics_stats = stats
 

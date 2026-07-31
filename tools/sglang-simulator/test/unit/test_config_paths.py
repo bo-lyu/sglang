@@ -1,5 +1,7 @@
 from sglang_simulator.simulation.manager.config import ConfigManager
 from sglang_simulator.simulation.manager.env import Envs
+from sglang_simulator.simulation.types import SchedulerConfig
+from sglang_simulator.spec import DataType, ModelInfo
 
 
 def test_predictor_path_resolves_from_sim_config_ancestor(tmp_path, monkeypatch):
@@ -26,3 +28,23 @@ def test_predictor_absolute_path_is_unchanged(tmp_path):
 
     resolved = ConfigManager.resolve_config_relative_path(str(predictor_path))
     assert resolved == str(predictor_path)
+
+
+def test_kv_cache_size_uses_kv_cache_data_type(monkeypatch):
+    model = ModelInfo(
+        attention_arch="MHA",
+        head_dim=16,
+        num_hidden_layers=4,
+        num_key_value_heads=8,
+    )
+    scheduler_config = SchedulerConfig(
+        data_type=DataType.FP16,
+        kv_cache_data_type=DataType.FP8,
+        tp_size=2,
+        pp_size=2,
+    )
+    monkeypatch.setattr(ConfigManager, "_model_info", model)
+    monkeypatch.setattr(ConfigManager, "_scheduler_config", scheduler_config)
+
+    assert ConfigManager.get_kv_cache_bytes() == 256
+    assert ConfigManager.get_kv_cache_bytes_per_layer() == 128

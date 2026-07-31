@@ -69,7 +69,9 @@ MAP_DTYPE_TO_CommQunatMode = {
     DataType.FP16: CommQuantMode.half,
     DataType.BF16: CommQuantMode.half,
     DataType.FP8: CommQuantMode.fp8,
-    DataType.FP4: CommQuantMode.fp8,  # FIXME
+    # AIC has no FP4 communication mode, so use its FP8 communication data
+    # for FP4 model configurations.
+    DataType.FP4: CommQuantMode.fp8,
     DataType.INT8: CommQuantMode.int8,
 }
 
@@ -163,20 +165,6 @@ class AIConfiguratorTimePredictor(InferTimePredictor):
 
         database.set_default_database_mode(database_mode)
         logger.info(f"AIC Database mode: {database_mode}")
-
-        # --- Replace the original function to support more flexible request input. --- #
-
-        db_nearest_1d_point_helper = database._nearest_1d_point_helper
-
-        def wrapped_nearest_1d_point_helper(
-            x: int, values: list[int], inner_only: bool = False
-        ):
-            # Disable the inner_only by default
-            return db_nearest_1d_point_helper(x, values, inner_only)
-
-        database._nearest_1d_point_helper = wrapped_nearest_1d_point_helper
-
-        # --- End --- #
 
         self._session = InferenceSession(
             model=get_perf_model(config, model, workload_distribution),

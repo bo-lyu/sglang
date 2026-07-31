@@ -152,7 +152,7 @@ class ConfigManager:
             calc_kv_cache_cell_elems(
                 model, scheduler_config.tp_size, scheduler_config.pp_size
             )
-            * scheduler_config.data_type.bytes
+            * scheduler_config.kv_cache_data_type.bytes
         )
 
     @classmethod
@@ -163,7 +163,7 @@ class ConfigManager:
             calc_kv_cache_per_layer_elems(
                 model, scheduler_config.tp_size, scheduler_config.pp_size
             )
-            * scheduler_config.data_type.bytes
+            * scheduler_config.kv_cache_data_type.bytes
         )
 
     @classmethod

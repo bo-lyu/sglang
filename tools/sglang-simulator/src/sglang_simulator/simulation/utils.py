@@ -209,9 +209,8 @@ def calc_metrics(requests: list[RequestStats]) -> dict:
             continue
         completed += 1
         ttfts.append(req.gen_token_latencies[0])
-        # Keep the 0714 queue definition: time in SGLang waiting_queue before
-        # first prefill admission. The additional metrics expose the preceding
-        # dispatcher pickup delay and the full arrival-to-prefill duration.
+        # Queue latency is the time spent in SGLang's waiting queue before
+        # the request's first prefill admission.
         queue_durs.append(req.queue_end - req.queue_start)
         dispatch_wait_durs.append(req.queue_start - req.created_time)
         arrival_to_prefill_durs.append(req.queue_end - req.created_time)

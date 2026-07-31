@@ -53,5 +53,5 @@ class Envs:
 
     @classmethod
     def num_warmup(cls) -> int:
-        # The number of warmup requests.
+        """Return the number of initial requests excluded from profile metrics."""
         return int(os.getenv("SGLANG_SIMULATOR_NUM_WARMUP", "0"))
