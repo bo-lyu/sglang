@@ -26,45 +26,51 @@ from sglang_simulator.spec.accelerator import AcceleratorInfo
 
 
 def test_alloc_extend_cpu_preserves_page_layout_across_sequences():
-    page_size = 4
+    allocator = SimpleNamespace(
+        page_size=4,
+        free_pages=torch.tensor([7, 8, 9], dtype=torch.int64),
+        need_sort=False,
+        device="cpu",
+    )
     prefix_lens = torch.tensor([3, 4, 0], dtype=torch.int64)
     seq_lens = torch.tensor([6, 5, 3], dtype=torch.int64)
     last_loc = torch.tensor([10, 19, -1], dtype=torch.int64)
-    free_pages = torch.tensor([7, 8, 9], dtype=torch.int64)
-    out_indices = torch.empty(7, dtype=torch.int64)
 
-    alloc_extend_cpu(
+    out_indices = alloc_extend_cpu(
+        allocator,
+        prefix_lens,
         prefix_lens,
         seq_lens,
+        seq_lens,
         last_loc,
-        free_pages,
-        out_indices,
-        bs_upper=3,
-        page_size=page_size,
+        extend_num_tokens=7,
     )
 
     # Sequence 0 reuses one slot in its current page, then uses page 7.
     # Sequence 1 uses page 8. Sequence 2 uses page 9.
     assert out_indices.tolist() == [11, 28, 29, 32, 36, 37, 38]
+    assert allocator.free_pages.numel() == 0
 
 
 def test_alloc_decode_cpu_only_consumes_pages_at_page_boundaries():
-    page_size = 4
+    allocator = SimpleNamespace(
+        page_size=4,
+        free_pages=torch.tensor([7, 8], dtype=torch.int64),
+        need_sort=False,
+        device="cpu",
+    )
     seq_lens = torch.tensor([4, 5, 8, 9], dtype=torch.int64)
     last_loc = torch.tensor([2, 15, 30, 35], dtype=torch.int64)
-    free_pages = torch.tensor([7, 8], dtype=torch.int64)
-    out_indices = torch.empty(4, dtype=torch.int64)
 
-    alloc_decode_cpu(
+    out_indices = alloc_decode_cpu(
+        allocator,
+        seq_lens,
         seq_lens,
         last_loc,
-        free_pages,
-        out_indices,
-        bs_upper=4,
-        page_size=page_size,
     )
 
     assert out_indices.tolist() == [3, 28, 31, 32]
+    assert allocator.free_pages.numel() == 0
 
 
 def test_input_token_metrics_keep_accounting_exact():

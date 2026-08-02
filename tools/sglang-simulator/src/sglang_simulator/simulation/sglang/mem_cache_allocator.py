@@ -1,153 +1,113 @@
+import types
+
 import torch
 from sglang_simulator.hook import BaseHook
 
 
-class IndexableWrapper:
-    def __init__(self, fn):
-        self._fn = fn
-
-    def __getitem__(self, _):
-        return self._fn
-
-    def __call__(self, *args, **kwargs):
-        return self._fn(*args, **kwargs)
-
-
-def ceil_div(a, b):
-    return (a + b - 1) // b
-
-
-def alloc_extend_cpu(
-    pre_lens_ptr: torch.Tensor,
-    seq_lens_ptr: torch.Tensor,
-    last_loc_ptr: torch.Tensor,
-    free_page_ptr: torch.Tensor,
-    out_indices: torch.Tensor,  # Pre-allocated output tensor (consistent with Triton kernel)
-    bs_upper: int,  # CPU doesn't need this, but kept for interface consistency (can be ignored)
-    page_size: int,
-    extend_num_tokens=None,
+def _alloc_extend_cpu(
+    self,
+    prefix_lens: torch.Tensor,
+    prefix_lens_cpu: torch.Tensor,
+    seq_lens: torch.Tensor,
+    seq_lens_cpu: torch.Tensor,
+    last_loc: torch.Tensor,
+    extend_num_tokens: int,
+    num_new_pages: int = None,
 ):
-    # Convert to Python list or scalar for processing
-    pre_lens = pre_lens_ptr.cpu().tolist()
-    seq_lens = seq_lens_ptr.cpu().tolist()
-    last_loc = last_loc_ptr.cpu().tolist()
-    free_pages = free_page_ptr.cpu().tolist()
+    """CPU implementation using SGLang's native paged-allocation helper."""
+    from sglang.srt.mem_cache.allocator import alloc_extend_naive
+    from sglang.srt.utils import get_num_new_pages
 
-    batch_size = len(pre_lens)
+    if num_new_pages is None:
+        num_new_pages = get_num_new_pages(
+            seq_lens=seq_lens_cpu,
+            page_size=self.page_size,
+            prefix_lens=prefix_lens_cpu,
+        )
+    if self.need_sort and num_new_pages > len(self.free_pages):
+        self.merge_and_sort_free()
+    if num_new_pages > len(self.free_pages):
+        return None
 
-    extend_lens = [seq_lens[i] - pre_lens[i] for i in range(batch_size)]
-    num_new_pages_per_seq = []
-    for i in range(batch_size):
-        pages_before = ceil_div(pre_lens[i], page_size)
-        pages_after = ceil_div(seq_lens[i], page_size)
-        num_new_pages_per_seq.append(pages_after - pages_before)
-
-    # Initialize offsets
-    output_offset = 0
-    free_page_offset = 0
-
-    # Process each sequence
-    for pid in range(batch_size):
-        pre_len = pre_lens[pid]
-        seq_len = seq_lens[pid]
-        extend_len = extend_lens[pid]
-        last_token_pos = last_loc[pid]
-
-        if extend_len <= 0:
-            # No extension, skip (but still need to advance free_page_offset)
-            free_page_offset += num_new_pages_per_seq[pid]
-            continue
-
-        # === Part 1: Fill the remaining space of the current incomplete page ===
-        current_page_end = ceil_div(pre_len, page_size) * page_size
-        part1_end = min(seq_len, current_page_end)
-        num_part1 = part1_end - pre_len
-
-        if num_part1 > 0:
-            # out_indices[output_offset : output_offset + num_part1] = last_token_pos + 1 + i
-            for i in range(num_part1):
-                out_indices[output_offset + i] = last_token_pos + 1 + i
-            output_offset += num_part1
-
-        if pre_len + num_part1 == seq_len:
-            free_page_offset += num_new_pages_per_seq[pid]
-            continue
-
-        # === Part 2: Fill complete new pages ===
-        full_pages_start = current_page_end
-        full_pages_end = (seq_len // page_size) * page_size
-        num_part2 = full_pages_end - full_pages_start
-
-        if num_part2 > 0:
-            for i in range(num_part2):
-                page_idx_in_free = free_page_offset + (i // page_size)
-                page_id = free_pages[page_idx_in_free]
-                token_in_page = i % page_size
-                out_indices[output_offset + i] = page_id * page_size + token_in_page
-            output_offset += num_part2
-
-        if pre_len + num_part1 + num_part2 == seq_len:
-            free_page_offset += num_new_pages_per_seq[pid]
-            continue
-
-        # === Part 3: Fill the last incomplete new page ===
-        num_part3 = seq_len - full_pages_end
-        if num_part3 > 0:
-            last_page_idx = free_page_offset + num_new_pages_per_seq[pid] - 1
-            last_page_id = free_pages[last_page_idx]
-            for i in range(num_part3):
-                out_indices[output_offset + i] = last_page_id * page_size + i
-            output_offset += num_part3
-
-        # Push forward free_page_offset
-        free_page_offset += num_new_pages_per_seq[pid]
+    out_indices = torch.empty(
+        (extend_num_tokens,),
+        dtype=self.free_pages.dtype,
+        device=self.device,
+    )
+    alloc_extend_naive(
+        prefix_lens,
+        seq_lens,
+        last_loc,
+        self.free_pages,
+        out_indices,
+        self.page_size,
+        self.device,
+    )
+    self.free_pages = self.free_pages[num_new_pages:]
+    return out_indices
 
 
-def alloc_decode_cpu(
-    seq_lens_ptr: torch.Tensor,
-    last_loc_ptr: torch.Tensor,
-    free_page_ptr: torch.Tensor,
-    out_indices: torch.Tensor,
-    bs_upper: int,  # Reserved parameter (not used in CPU)
-    page_size: int,
+def _alloc_decode_cpu(
+    self,
+    seq_lens: torch.Tensor,
+    seq_lens_cpu: torch.Tensor,
+    last_loc: torch.Tensor,
 ):
-    seq_lens = seq_lens_ptr.cpu().tolist()
-    last_loc = last_loc_ptr.cpu().tolist()
-    free_pages = free_page_ptr.cpu().tolist()
+    """CPU decode allocation through the allocator's public method contract."""
+    from sglang.srt.utils import get_num_new_pages
 
-    batch_size = len(seq_lens)
+    num_new_pages = get_num_new_pages(
+        seq_lens=seq_lens_cpu,
+        page_size=self.page_size,
+        decode=True,
+    )
+    if self.need_sort and num_new_pages > len(self.free_pages):
+        self.merge_and_sort_free()
+    if num_new_pages > len(self.free_pages):
+        return None
 
-    # Calculate the number of new pages needed for each sequence (used to determine free_page offset)
-    num_new_pages_per_seq = []
-    for i in range(batch_size):
-        pre_len_i = seq_lens[i] - 1
-        pages_before = ceil_div(pre_len_i, page_size)
-        pages_after = ceil_div(seq_lens[i], page_size)
-        num_new_pages_per_seq.append(pages_after - pages_before)
+    out_indices = last_loc + 1
+    need_new_page = seq_lens % self.page_size == 1
+    if num_new_pages:
+        out_indices = out_indices.clone()
+        out_indices[need_new_page] = self.free_pages[:num_new_pages] * self.page_size
 
-    # Calculate prefix sum to determine the starting position in free_page_ptr for each sequence
-    prefix_sum = 0
-    for pid in range(batch_size):
-        num_new_pages_self = num_new_pages_per_seq[pid]
-        new_page_start_loc = (
-            prefix_sum  # Starting index in free_pages for current sequence
+    self.free_pages = self.free_pages[num_new_pages:]
+    return out_indices.to(self.free_pages.dtype)
+
+
+def alloc_extend_cpu(*args, **kwargs):
+    """Compatibility entry plus the native allocator-method implementation."""
+    if args and isinstance(args[0], torch.Tensor):
+        from sglang.srt.mem_cache.allocator import alloc_extend_naive
+
+        prefix_lens, seq_lens, last_loc, free_pages, out_indices = args[:5]
+        alloc_extend_naive(
+            prefix_lens,
+            seq_lens,
+            last_loc,
+            free_pages,
+            out_indices,
+            kwargs["page_size"],
+            prefix_lens.device,
         )
-        prefix_sum += num_new_pages_self
+        return None
+    return _alloc_extend_cpu(*args, **kwargs)
 
-        seq_len = seq_lens[pid]
-        pre_len = seq_len - 1
 
-        num_page_start_loc_self = ceil_div(seq_len, page_size) - ceil_div(
-            pre_len, page_size
+def alloc_decode_cpu(*args, **kwargs):
+    """Compatibility entry plus the native allocator-method implementation."""
+    if args and isinstance(args[0], torch.Tensor):
+        seq_lens, last_loc, free_pages, out_indices = args[:4]
+        page_size = kwargs["page_size"]
+        need_new_page = seq_lens % page_size == 1
+        result = last_loc + 1
+        result[need_new_page] = (
+            free_pages[: int(need_new_page.sum().item())] * page_size
         )
-
-        if num_page_start_loc_self == 0:
-            # Reuse current page, directly write last_loc + 1
-            out_indices[pid] = last_loc[pid] + 1
-        else:
-            # Allocate new page, take the first new page ID
-            page_id = free_pages[new_page_start_loc]
-            out_indices[pid] = page_id * page_size
+        out_indices.copy_(result)
+        return None
+    return _alloc_decode_cpu(*args, **kwargs)
 
 
 class C_PagedTokenToKVPoolAllocatorHook(BaseHook):
@@ -162,16 +122,7 @@ class C_PagedTokenToKVPoolAllocatorHook(BaseHook):
         def wrapped_init(self, *args, **kwargs):
             original_init(self, *args, **kwargs)
             if self.device == "cpu":
-                try:
-                    # SGLang >= v0.5.16 split allocators into a package.
-                    from sglang.srt.mem_cache.allocator import paged as paged_allocator
-                except ImportError:
-                    # Compatibility with the pre-v0.5.16 single-module layout.
-                    from sglang.srt.mem_cache import allocator as paged_allocator
-
-                # GPU kernels are not compatible with the CPU simulator. Patch
-                # the module-local references used by PagedTokenToKVPoolAllocator.
-                paged_allocator.alloc_extend_kernel = IndexableWrapper(alloc_extend_cpu)
-                paged_allocator.alloc_decode_kernel = IndexableWrapper(alloc_decode_cpu)
+                self.alloc_extend = types.MethodType(_alloc_extend_cpu, self)
+                self.alloc_decode = types.MethodType(_alloc_decode_cpu, self)
 
         target.__init__ = wrapped_init

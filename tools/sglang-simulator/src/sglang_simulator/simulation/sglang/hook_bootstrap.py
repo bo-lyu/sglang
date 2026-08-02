@@ -36,6 +36,7 @@ def install_simulator_hooks() -> None:
             scheduler.C_SglangPrefillAdderHook,
             scheduler.C_SchedulerRequestReceiver,
             model_runner.C_ModelRunnerHook,
+            model_runner.C_KVCacheConfiguratorHook,
             hicache_storage.C_StorageBackendFactory,
             cache_controller.C_HiCacheController,
             hiradix_cache.C_HiRadixCacheHook,
@@ -45,6 +46,7 @@ def install_simulator_hooks() -> None:
             mem_pool_host.C_DeepSeekV4SingleKVPoolHook,
             mem_pool_host.C_DeepSeekV4PagedHostPoolHook,
             mem_pool_host.C_DeepSeekV4StateHostPoolHook,
+            mem_pool_host.C_GenericHostKVCacheSubclassHook,
         ]
     )
     _HOOKS_INSTALLED = True
