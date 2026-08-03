@@ -65,7 +65,7 @@ MAP_DTYPE_TO_MoEQuantMode = {
     DataType.INT4: MoEQuantMode.int4_wo,
 }
 
-MAP_DTYPE_TO_COMM_QUANT_MODE = {
+MAP_DTYPE_TO_CommQuantMode = {
     DataType.FP16: CommQuantMode.half,
     DataType.BF16: CommQuantMode.half,
     DataType.FP8: CommQuantMode.fp8,
@@ -84,7 +84,7 @@ def _resolve_comm_quant_mode(sched_config: SchedulerConfig) -> CommQuantMode:
         return CommQuantMode.half
 
     try:
-        return MAP_DTYPE_TO_COMM_QUANT_MODE[sched_config.data_type]
+        return MAP_DTYPE_TO_CommQuantMode[sched_config.data_type]
     except KeyError:
         raise ValueError(
             "AIConfigurator has no communication quantization mapping for "
