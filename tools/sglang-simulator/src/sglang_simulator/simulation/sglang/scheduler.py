@@ -506,15 +506,11 @@ class C_SchedulerHook(BaseHook):
                 # Step CPU overhead BEFORE recording latencies,
                 # so current iter's CPU time is reflected in current iter's TTFT.
                 now = time.time()
-                cpu_overhead = 0.0
-                if not ConfigManager.ignore_cpu_overhead():
-                    cpu_overhead = max(
-                        now
-                        - StateManager.get_last_real_time_ts()
-                        - blocked_l2_wall_dur,
-                        0.0,
-                    )
-                    StateManager.step_global_clock(cpu_overhead)
+                cpu_overhead = max(
+                    now - StateManager.get_last_real_time_ts() - blocked_l2_wall_dur,
+                    0.0,
+                )
+                StateManager.step_global_clock(cpu_overhead)
                 StateManager.set_last_real_time_ts(now)
 
                 request_response_time = StateManager.get_global_clock()

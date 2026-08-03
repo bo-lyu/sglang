@@ -1,10 +1,8 @@
-import json
 import sys
 from types import SimpleNamespace
 
 import pytest
 import torch
-from sglang_simulator.simulation.manager.config import ConfigManager
 from sglang_simulator.simulation.manager.state import StateManager
 from sglang_simulator.simulation.sglang.mem_cache_allocator import (
     alloc_decode_cpu,
@@ -306,24 +304,3 @@ def test_simulation_mode_log_message(mode):
         simulation_mode_log_message(mode)
         == f"SGLang Simulator simulation mode: {mode.value}"
     )
-
-
-def test_ignore_cpu_overhead_defaults_to_0714_semantics(monkeypatch, tmp_path):
-    config_path = tmp_path / "simulator.json"
-    config_path.write_text(json.dumps({"scheduler": {}}))
-    monkeypatch.setenv("SGLANG_SIMULATOR_CONFIG_PATH", str(config_path))
-    ConfigManager.reset_config_cache()
-
-    assert ConfigManager.ignore_cpu_overhead() is False
-
-
-def test_ignore_cpu_overhead_can_be_enabled_and_cache_is_reset(monkeypatch, tmp_path):
-    config_path = tmp_path / "simulator.json"
-    config_path.write_text(json.dumps({"scheduler": {"ignore_cpu_overhead": True}}))
-    monkeypatch.setenv("SGLANG_SIMULATOR_CONFIG_PATH", str(config_path))
-    ConfigManager.reset_config_cache()
-    assert ConfigManager.ignore_cpu_overhead() is True
-
-    config_path.write_text(json.dumps({"scheduler": {"ignore_cpu_overhead": False}}))
-    ConfigManager.reset_config_cache()
-    assert ConfigManager.ignore_cpu_overhead() is False
