@@ -65,18 +65,32 @@ MAP_DTYPE_TO_MoEQuantMode = {
     DataType.INT4: MoEQuantMode.int4_wo,
 }
 
-MAP_DTYPE_TO_CommQunatMode = {
+MAP_DTYPE_TO_COMM_QUANT_MODE = {
     DataType.FP16: CommQuantMode.half,
     DataType.BF16: CommQuantMode.half,
     DataType.FP8: CommQuantMode.fp8,
-    # AIC has no FP4 communication mode, so use its FP8 communication data
-    # for FP4 model configurations.
-    DataType.FP4: CommQuantMode.fp8,
     DataType.INT8: CommQuantMode.int8,
 }
 
 
 logger = get_logger("sgl_simulator")
+
+
+def _resolve_comm_quant_mode(sched_config: SchedulerConfig) -> CommQuantMode:
+    if sched_config.comm_quant_mode_override:
+        return getattr(CommQuantMode, sched_config.comm_quant_mode_override)
+
+    if sched_config.data_type is None:
+        return CommQuantMode.half
+
+    try:
+        return MAP_DTYPE_TO_COMM_QUANT_MODE[sched_config.data_type]
+    except KeyError:
+        raise ValueError(
+            "AIConfigurator has no communication quantization mapping for "
+            f"model data type {sched_config.data_type.value}. Set "
+            "comm_quant_mode_override explicitly to half, int8, or fp8."
+        ) from None
 
 
 def get_perf_model(
@@ -110,13 +124,7 @@ def get_perf_model(
                 sched_config.kv_cache_data_type, FMHAQuantMode.bfloat16
             )
         ),
-        comm_quant_mode=(
-            getattr(CommQuantMode, sched_config.comm_quant_mode_override)
-            if sched_config.comm_quant_mode_override
-            else MAP_DTYPE_TO_CommQunatMode.get(
-                sched_config.data_type, CommQuantMode.half
-            )
-        ),
+        comm_quant_mode=_resolve_comm_quant_mode(sched_config),
         workload_distribution=workload_distribution,
     )
 

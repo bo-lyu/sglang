@@ -1,6 +1,10 @@
+import pytest
+from aiconfigurator.sdk.common import CommQuantMode
+
 from sglang_simulator.simulation.types import (
     SchedulerConfig,
 )
+from sglang_simulator.spec import DataType
 from sglang_simulator.spec.accelerator import AcceleratorInfo
 from sglang_simulator.spec.model import ModelInfo
 from sglang_simulator.time_predictor import (
@@ -8,6 +12,21 @@ from sglang_simulator.time_predictor import (
     ScheduleBatch,
     ScheduleRequest,
 )
+from sglang_simulator.time_predictor.aiconfigurator import (
+    _resolve_comm_quant_mode,
+)
+
+
+def test_fp4_communication_mode_requires_explicit_override():
+    config = SchedulerConfig(data_type=DataType.FP4)
+
+    with pytest.raises(
+        ValueError, match="no communication quantization mapping.*FP4"
+    ):
+        _resolve_comm_quant_mode(config)
+
+    config.comm_quant_mode_override = "fp8"
+    assert _resolve_comm_quant_mode(config) is CommQuantMode.fp8
 
 
 def test_time_predictor():
