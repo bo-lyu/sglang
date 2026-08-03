@@ -29,7 +29,22 @@ checkout whose `python/sglang` package is available on `PYTHONPATH`, or from a
 matching official SGLang image.
 
 AIConfigurator is optional. Install it separately when using the
-`aiconfigurator` predictor.
+`aiconfigurator` predictor. The `aic` extra pins AIConfigurator to the exact release
+validated with the simulator so upstream API changes cannot silently alter an
+installation. In a clean virtual environment, install the extra with:
+
+```bash
+pip install -e "tools/sglang-simulator[aic]"
+```
+
+In an existing SGLang image, install the same pin without dependency resolution
+to avoid replacing its NumPy/CUDA stack:
+
+```bash
+pip install --no-deps "aiconfigurator==0.10.0"
+```
+
+Upgrade this pin only after rerunning the AIC predictor and compatibility tests.
 
 ## Quick start
 
