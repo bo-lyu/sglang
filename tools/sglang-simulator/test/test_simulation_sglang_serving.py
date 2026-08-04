@@ -7,78 +7,17 @@ import sys
 import time
 from pathlib import Path
 
-import joblib
-import numpy as np
 import pytest
 import requests
-from sglang_simulator.time_predictor.ml import MLTimePredictor
-from sklearn.dummy import DummyRegressor
-from tokenizers import Tokenizer
-from tokenizers.models import WordLevel
-from tokenizers.pre_tokenizers import Whitespace
-from transformers import PreTrainedTokenizerFast
 
 ASSETS = Path(__file__).parent / "assets"
-
-
-def _write_random_assets(tmp_path: Path) -> tuple[Path, Path]:
-    tokenizer = Tokenizer(WordLevel({"[UNK]": 0, "hello": 1}, unk_token="[UNK]"))
-    tokenizer.pre_tokenizer = Whitespace()
-    tokenizer_path = tmp_path / "tokenizer"
-    PreTrainedTokenizerFast(
-        tokenizer_object=tokenizer, unk_token="[UNK]"
-    ).save_pretrained(tokenizer_path)
-
-    dataset_path = tmp_path / "sharegpt.json"
-    conversation = {
-        "conversations": [
-            {"from": "human", "value": "hello"},
-            {"from": "assistant", "value": "hello"},
-        ]
-    }
-    dataset_path.write_text(json.dumps([conversation] * 3), encoding="utf-8")
-    return tokenizer_path, dataset_path
-
-
-def _write_sim_config(tmp_path: Path, predictor: str) -> Path:
-    predictor_config = {"name": predictor}
-    if predictor == "aiconfigurator":
-        predictor_config["database_mode"] = "SOL"
-    elif predictor == "replay":
-        table_path = tmp_path / "replay.json"
-        table_path.write_text(json.dumps({"[[8, 0]]": 0.001}), encoding="utf-8")
-        predictor_config.update(
-            database_path=str(table_path), miss_strategy="knn", miss_knn_k=1
-        )
-    else:
-        model = DummyRegressor(strategy="constant", constant=0.001)
-        model.fit(np.zeros((1, 18)), [0.001])
-        model_path = tmp_path / "model.pkl"
-        joblib.dump(
-            {"model": model, "features": MLTimePredictor.FEATURE_NAMES}, model_path
-        )
-        predictor_config["database_path"] = str(model_path)
-
-    config = {
-        "platform": {
-            "accelerator": {"name": "a100_sxm", "hbm_capacity_gb": 80},
-            "disk_read_bandwidth_gb": 8,
-            "disk_write_bandwidth_gb": 8,
-            "memory_read_bandwidth_gb": 64,
-            "memory_write_bandwidth_gb": 64,
-            "num_device_per_node": 8,
-        },
-        "predictor": predictor_config,
-        "scheduler": {
-            "tp_size": 1,
-            "ep_size": 1,
-            "dp_size": 1,
-            "backend_version": "0.5.9",
-        },
-    }
-    config_path = tmp_path / "sim_config.json"
-    config_path.write_text(json.dumps(config), encoding="utf-8")
-    return config_path
+EXAMPLES = Path(__file__).parent.parent / "examples"
+SIM_CONFIGS = {
+    "aic_sol": EXAMPLES / "sim_configs" / "aic_sol.json",
+    "aic_silicon": EXAMPLES / "sim_configs" / "aic_silicon.json",
+    "ml": EXAMPLES / "sim_configs" / "ml.json",
+    "replay": EXAMPLES / "sim_configs" / "replay.json",
+}
 
 
 class SGLangServingRunner:
@@ -106,7 +45,8 @@ class SGLangServingRunner:
             str(config_path),
             "--port",
             str(self.port),
-            "--skip-tokenizer-init",
+            "--tokenizer-path",
+            str(EXAMPLES / "assets" / "tokenizer"),
             "--max-total-tokens",
             "8192",
             "--max-running-requests",
@@ -130,32 +70,41 @@ class SGLangServingRunner:
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
-    def benchmark(self, output_file: Path) -> dict:
-        tokenizer_path, dataset_path = _write_random_assets(output_file.parent)
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "sglang_simulator.simulation.bench_serving",
-                "--simulator-mode=offline",
-                "--backend=sglang",
-                f"--base-url={self.base_url}",
-                "--warmup-requests=0",
-                f"--model={ASSETS / 'qwen3-8b'}",
-                "--dataset-name=random",
-                f"--dataset-path={dataset_path}",
-                f"--tokenizer={tokenizer_path}",
-                "--random-input-len=8",
-                "--random-output-len=2",
-                "--random-range-ratio=1",
-                "--num-prompts=3",
-                "--tokenize-prompt",
-                "--disable-tqdm",
-                "--profile",
-                f"--output-file={output_file}",
-            ],
-            check=True,
-        )
+    def benchmark(self, output_file: Path, workload: str = "sharegpt") -> dict:
+        cmd = [
+            sys.executable,
+            "-m",
+            "sglang_simulator.simulation.bench_serving",
+            "--simulator-mode=offline",
+            "--backend=sglang",
+            f"--base-url={self.base_url}",
+            "--warmup-requests=0",
+            f"--model={ASSETS / 'qwen3-8b'}",
+            f"--tokenizer={EXAMPLES / 'assets' / 'tokenizer'}",
+            "--num-prompts=3",
+            "--disable-tqdm",
+            "--profile",
+            f"--output-file={output_file}",
+        ]
+        if workload == "sharegpt":
+            cmd.extend(
+                [
+                    "--dataset-name=sharegpt",
+                    f"--dataset-path={EXAMPLES / 'workloads' / 'sharegpt-example.json'}",
+                    "--sharegpt-output-len=4",
+                ]
+            )
+        else:
+            assert workload == "timestamp_trace"
+            cmd.extend(
+                [
+                    "--dataset-name=autobench",
+                    f"--dataset-path={EXAMPLES / 'workloads' / 'timestamp-trace-example.jsonl'}",
+                    "--use-trace-timestamps",
+                ]
+            )
+
+        subprocess.run(cmd, check=True)
         assert output_file.is_file()
         return json.loads(
             (self.output_dir / "metrics.json").read_text(encoding="utf-8")
@@ -172,14 +121,33 @@ class SGLangServingRunner:
             self.server_proc.wait()
 
 
-@pytest.mark.parametrize("predictor", ["aiconfigurator", "replay", "ml"])
-def test_benchmark(predictor, tmp_path):
-    runner = SGLangServingRunner(_write_sim_config(tmp_path, predictor), tmp_path)
+def assert_decode_metrics(metrics):
+    assert metrics["completed"] == 3
+    assert metrics["total_output"] == 12
+    assert metrics["mean_ttft_ms"] >= 0
+    assert metrics["mean_tpot_ms"] > 0
+    assert metrics["mean_itl_ms"] > 0
+    assert metrics["input_throughput"] > 0
+
+
+@pytest.mark.parametrize("config_name", SIM_CONFIGS)
+def test_benchmark(config_name, tmp_path):
+    runner = SGLangServingRunner(SIM_CONFIGS[config_name], tmp_path)
     try:
         metrics = runner.benchmark(tmp_path / "benchmark.json")
     finally:
         runner.shutdown()
 
-    assert metrics["completed"] == 3
-    assert metrics["mean_ttft_ms"] >= 0
-    assert metrics["input_throughput"] > 0
+    assert_decode_metrics(metrics)
+
+
+def test_timestamp_trace(tmp_path):
+    runner = SGLangServingRunner(SIM_CONFIGS["replay"], tmp_path)
+    try:
+        metrics = runner.benchmark(
+            tmp_path / "benchmark.json", workload="timestamp_trace"
+        )
+    finally:
+        runner.shutdown()
+
+    assert_decode_metrics(metrics)
