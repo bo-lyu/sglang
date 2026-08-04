@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 import json
 import os
 from dataclasses import asdict
@@ -52,6 +53,7 @@ class SGLangBenchmarkRunner(BaseBenchmarkRunner):
         override_server_args(server_args, disable_cuda_graph=True)
         self.server_args = server_args
         self.engine = SGLangSimulationEngine(**asdict(server_args))
+        self._shutdown = False
 
     def flush_cache(self):
         self.engine.flush_cache()
@@ -165,5 +167,15 @@ class SGLangBenchmarkRunner(BaseBenchmarkRunner):
         return data
 
     def shutdown(self):
+        if self._shutdown:
+            return None
+
         logger.info("Attempting to shut down the SGLang backend engine.")
-        return self.engine.shutdown()
+        try:
+            return self.engine.shutdown()
+        finally:
+            self._shutdown = True
+            # Engine registers this bound method with atexit. Once the runner has
+            # shut it down explicitly, remove that callback to avoid a second
+            # teardown after test/output streams have already been closed.
+            atexit.unregister(self.engine.shutdown)

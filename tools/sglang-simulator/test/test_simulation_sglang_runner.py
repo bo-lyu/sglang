@@ -1,6 +1,8 @@
+import atexit
 import json
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 from sglang_simulator.dataset import GenericRequest, SimpleDataset
 from sglang_simulator.simulation.benchmark import BenchmarkConfig
@@ -97,4 +99,8 @@ def test_benchmark_sglang(tmp_path):
     runner.benchmark(benchmark_config, dataset=evict_l2_ds)
     metrics = runner.benchmark(benchmark_config, dataset=cached_ds)
     assert metrics["kv_cache_storage_hit_ratio"] > 0.95
-    runner.shutdown()
+    with patch.object(atexit, "unregister", wraps=atexit.unregister) as unregister:
+        runner.shutdown()
+        runner.shutdown()
+
+    unregister.assert_called_once_with(runner.engine.shutdown)
