@@ -48,29 +48,23 @@ Upgrade this pin only after rerunning the AIC predictor and compatibility tests.
 
 ## Quick start
 
-The repository includes a deterministic replay example:
+The two supported integration modes are exercised by executable tests:
+
+- [`test/test_simulation_sglang_runner.py`](test/test_simulation_sglang_runner.py):
+  direct Python use of `SGLangBenchmarkRunner` in the current process;
+- [`test/test_simulation_sglang_serving.py`](test/test_simulation_sglang_serving.py):
+  server plus benchmark-client use through the HTTP serving path.
+
+From `tools/sglang-simulator`:
 
 ```bash
-export SGLANG_ROOT=/absolute/path/to/sglang
-export PYTHONPATH="${SGLANG_ROOT}/python:${PYTHONPATH:-}"
-
-# Update model_path in server_args.json before running.
-python3 "${SGLANG_ROOT}/tools/sglang-simulator/examples/run_inprocess.py" \
-  --server-args "${SGLANG_ROOT}/tools/sglang-simulator/examples/replay/server_args.json" \
-  --sim-config "${SGLANG_ROOT}/tools/sglang-simulator/examples/replay/simulator.json" \
-  --mode OFFLINE \
-  --workload trace \
-  --dataset "${SGLANG_ROOT}/tools/sglang-simulator/examples/replay/trace.jsonl" \
-  --num-prompts 3 \
-  --output-dir /tmp/sglang-simulator-replay
+python3 -m pytest -q test/test_simulation_sglang_runner.py
+python3 -m pytest -q test/test_simulation_sglang_serving.py
 ```
 
-The run writes:
-
-- `result.metrics.json`
-- `result.request.jsonl`
-- `result.iteration.jsonl`
-- resolved copies of the server and simulator configuration
+Read these tests as the minimal maintained examples for constructing a dataset,
+running a benchmark, starting a simulator server, sending ShareGPT or timestamped
+traffic, and collecting metrics.
 
 ## Serving mode
 
@@ -104,8 +98,11 @@ python3 -m sglang_simulator.simulation.bench_serving \
   --profile
 ```
 
-Server options are normal SGLang command-line arguments. The in-process example
-constructs the same `ServerArgs` object from JSON.
+Server options are normal SGLang command-line arguments. For direct Python
+integration, see
+[`test_simulation_sglang_runner.py`](test/test_simulation_sglang_runner.py); for the
+process/HTTP path, see
+[`test_simulation_sglang_serving.py`](test/test_simulation_sglang_serving.py).
 
 ## Simulation modes
 
@@ -170,7 +167,7 @@ The Autobench trace format uses timestamps in milliseconds:
 {"prompt":[1,2,3],"prompt_len":3,"output_len":1,"timestamp":200}
 ```
 
-Random and ShareGPT workloads are also supported by the in-process and serving
+Random and ShareGPT workloads are also supported by the runner API and serving
 benchmark paths.
 
 ## Validation
@@ -179,8 +176,12 @@ Run the CPU compatibility and unit tests from the repository root:
 
 ```bash
 pip install -e tools/sglang-simulator
-python3 -m pytest -q tools/sglang-simulator/test/unit
+python3 -m pytest -q tools/sglang-simulator/test/test_simulation_sglang_runner.py
+python3 -m pytest -q tools/sglang-simulator/test/test_simulation_sglang_serving.py
 ```
+
+Run the two files as separate pytest commands because the runner test installs
+process-global simulator hooks and state.
 
 Run repository checks before submitting:
 
