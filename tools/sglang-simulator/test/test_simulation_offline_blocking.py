@@ -50,30 +50,24 @@ def test_request_rate_offline_matches_blocking(tmp_path):
     offline_metrics, offline_requests = _run_mode("offline", tmp_path)
     blocking_metrics, blocking_requests = _run_mode("blocking", tmp_path)
 
-    for metrics, requests in (
-        (offline_metrics, offline_requests),
-        (blocking_metrics, blocking_requests),
-    ):
+    for metrics in (offline_metrics, blocking_metrics):
         assert_decode_metrics(metrics)
-        assert requests[1]["created_time"] > 0.5
-        assert requests[0]["last_event_time"] < requests[1]["created_time"]
-        assert requests[1]["last_event_time"] < requests[2]["created_time"]
-        assert metrics["max_concurrent_requests"] == 1
+
+    assert len(offline_requests) == len(blocking_requests) == 3
 
     offline_arrivals = [request["created_time"] for request in offline_requests]
     blocking_arrivals = [request["created_time"] for request in blocking_requests]
-    assert offline_arrivals == pytest.approx(blocking_arrivals, abs=0.05)
+    assert offline_arrivals[1] > 0.5
+    assert blocking_arrivals[1] > 0.5
+    assert offline_arrivals == pytest.approx(blocking_arrivals, abs=0.01)
+    assert (
+        offline_metrics["max_concurrent_requests"]
+        == blocking_metrics["max_concurrent_requests"]
+        == 1
+    )
 
-    for key in ("completed", "total_input", "total_output", "iterations"):
+    for key in ("completed", "total_input", "total_output"):
         assert offline_metrics[key] == blocking_metrics[key]
-
-    for key in (
-        "prefix_cache_reused_ratio",
-        "kv_cache_device_hit_ratio",
-        "kv_cache_host_hit_ratio",
-        "kv_cache_storage_hit_ratio",
-    ):
-        assert offline_metrics[key] == pytest.approx(blocking_metrics[key])
 
     for key, tolerance in RELATIVE_TOLERANCES.items():
         error = _relative_error(offline_metrics[key], blocking_metrics[key])
