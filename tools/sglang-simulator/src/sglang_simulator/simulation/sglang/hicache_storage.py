@@ -35,8 +35,19 @@ class MockHiCacheStorage:
                     self.storage.add(line.strip())
                     line = f.readline()
 
+        self.registered_pools = {}
+
     def register_mem_pool_host(self, mem_pool_host):
         pass
+
+    def register_mem_host_pool_v2(self, host_pool, host_pool_name):
+        """Register one pool from UnifiedRadixCache's multi-pool HiCache stack."""
+        self.registered_pools[host_pool_name] = host_pool
+
+    @staticmethod
+    def _pool_storage_key(key: str, pool_name) -> str:
+        name = str(pool_name)
+        return key if name == "kv" else f"{key}.{name}"
 
     def set(
         self,
@@ -74,6 +85,67 @@ class MockHiCacheStorage:
             if not self.exists(keys[i]):
                 return i
         return len(keys)
+
+    def batch_exists_v2(self, keys, pool_transfers=None, extra_info=None):
+        """Return Unified HiCache's per-pool longest-prefix result."""
+        from sglang.srt.mem_cache.hicache_storage import PoolTransferResult
+
+        kv_hit_pages = self.batch_exists(keys, extra_info)
+        extra_pool_hit_pages = {}
+        final_pages = kv_hit_pages
+        for transfer in pool_transfers or []:
+
+            def has_component(page_idx):
+                return self.exists(
+                    self._pool_storage_key(keys[page_idx], transfer.name)
+                )
+
+            hit_policy = getattr(transfer.hit_policy, "value", transfer.hit_policy)
+            if hit_policy == "all_pages":
+                boundary = next(
+                    (i for i in range(kv_hit_pages) if not has_component(i)),
+                    kv_hit_pages,
+                )
+            else:
+                trailing = max(1, len(transfer.keys) if transfer.keys else 1)
+                boundary = 0
+                for prefix_len in range(kv_hit_pages, 0, -1):
+                    if all(
+                        has_component(i)
+                        for i in range(max(0, prefix_len - trailing), prefix_len)
+                    ):
+                        boundary = prefix_len
+                        break
+            extra_pool_hit_pages[transfer.name] = boundary
+            final_pages = min(final_pages, boundary)
+
+        return PoolTransferResult(
+            kv_hit_pages=final_pages,
+            extra_pool_hit_pages=extra_pool_hit_pages,
+        )
+
+    def batch_get_v2(self, transfers, extra_info=None):
+        """Simulate loading every available pool page into registered host pools."""
+        results = {}
+        for transfer in transfers:
+            keys = transfer.keys or []
+            results[transfer.name] = [
+                self.exists(self._pool_storage_key(key, transfer.name)) for key in keys
+            ]
+        return results
+
+    def batch_set_v2(self, transfers, extra_info=None):
+        """Persist Unified HiCache component keys without materializing payloads."""
+        results = {}
+        for transfer in transfers:
+            keys = transfer.keys or []
+            pool_results = []
+            for key in keys:
+                pool_results.append(
+                    self.set(self._pool_storage_key(key, transfer.name))
+                )
+            results[transfer.name] = pool_results
+        return results
 
     def clear(self) -> bool:
         self.storage.clear()

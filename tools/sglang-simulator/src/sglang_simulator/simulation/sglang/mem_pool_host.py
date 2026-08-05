@@ -117,6 +117,46 @@ def get_refined_cache_size_per_token(host_pool) -> float:
     return internal_size * dtype_factor
 
 
+_DSV4_TRANSFER_SIZE_MULTIPLIERS = {
+    "swa": 130,
+    "deepseek_v4_c4": 65,
+    "deepseek_v4_c4_indexer": 132,
+    "deepseek_v4_c128": 3,
+    "deepseek_v4_c4_state": 256,
+    "deepseek_v4_c128_state": 256,
+    "deepseek_v4_indexer_state": 128,
+    "deepseek_v4_c4_indexer_state": 128,
+}
+
+_DSV4_PAGED_POOL_NAMES = {
+    "swa",
+    "deepseek_v4_c4",
+    "deepseek_v4_c4_indexer",
+    "deepseek_v4_c128",
+}
+
+
+def _dsv4_transfer_size_multiplier(host_pool) -> int | None:
+    return _DSV4_TRANSFER_SIZE_MULTIPLIERS.get(str(getattr(host_pool, "pool_name", "")))
+
+
+def get_transfer_size_per_unit(host_pool, *, all_layers: bool) -> float:
+    """Return calibrated bytes moved for one transfer unit.
+
+    DSv4's paged and state pools expose physical page-row geometry through Unified
+    HiCache. Preserve the 0714 estimator's calibrated logical-byte multipliers while
+    keeping transfer dispatch on the current Unified pool interfaces.
+    """
+    size = get_refined_cache_size_per_token(host_pool)
+    dsv4_multiplier = _dsv4_transfer_size_multiplier(host_pool)
+    if dsv4_multiplier is not None:
+        return size * dsv4_multiplier
+
+    layer_num = max(int(getattr(host_pool, "layer_num", 1)), 1)
+    per_layer_size = size / layer_num
+    return per_layer_size * layer_num if all_layers else per_layer_size
+
+
 def _transport_estimator() -> HicacheTransportEstimator:
     platform = ConfigManager.get_platform_config()
     return HicacheTransportOverheadEstimator(
@@ -134,20 +174,38 @@ def _normalize_transfer_indices(self, host_indices, device_indices):
     return host_indices, device_indices
 
 
-def _sim_load_to_device_per_layer(
-    self, device_pool, host_indices, device_indices, layer_id, io_backend
-) -> None:
+def _transfer_segment_lengths(
+    self, host_indices, device_indices, *, count_logical_tokens: bool = False
+) -> np.ndarray:
+    if host_indices is None or device_indices is None:
+        return np.empty(0, dtype=np.float64)
+
+    original_unit_count = len(host_indices)
     host_indices, device_indices = _normalize_transfer_indices(
         self, host_indices, device_indices
     )
-    if host_indices is None:
-        return
-    segment_lengths = compute_contiguous_index_lengths(host_indices, device_indices)
+    lengths = compute_contiguous_index_lengths(host_indices, device_indices)
+    if (
+        len(lengths)
+        and count_logical_tokens
+        and str(getattr(self, "pool_name", "")) in _DSV4_PAGED_POOL_NAMES
+    ):
+        # The 0714 DSv4 paged-pool H2D estimator counted logical token slots
+        # while using page-row contiguity to determine transfer segments.
+        lengths[-1] += original_unit_count - len(host_indices)
+    return lengths
+
+
+def _sim_load_to_device_per_layer(
+    self, device_pool, host_indices, device_indices, layer_id, io_backend
+) -> None:
+    segment_lengths = _transfer_segment_lengths(
+        self, host_indices, device_indices, count_logical_tokens=True
+    )
     if not len(segment_lengths):
         return
 
-    layer_num = max(int(getattr(self, "layer_num", 1)), 1)
-    size_bytes = segment_lengths * get_refined_cache_size_per_token(self) / layer_num
+    size_bytes = segment_lengths * get_transfer_size_per_unit(self, all_layers=False)
     StateManager.inc_hicache_l2_load_stats(
         call_count=1,
         segment_count=len(size_bytes),
@@ -163,16 +221,11 @@ def _sim_load_to_device_per_layer(
 def _sim_backup_from_device_all_layer(
     self, device_pool, host_indices, device_indices, io_backend
 ) -> None:
-    host_indices, device_indices = _normalize_transfer_indices(
-        self, host_indices, device_indices
-    )
-    if host_indices is None:
-        return
-    segment_lengths = compute_contiguous_index_lengths(host_indices, device_indices)
+    segment_lengths = _transfer_segment_lengths(self, host_indices, device_indices)
     if not len(segment_lengths):
         return
 
-    size_bytes = segment_lengths * get_refined_cache_size_per_token(self)
+    size_bytes = segment_lengths * get_transfer_size_per_unit(self, all_layers=True)
     bandwidth = _transport_estimator().estimate_bandwidth(
         size_bytes, TransportDirection.D2H
     )
@@ -234,22 +287,34 @@ class C_HostKVCacheHook(BaseHook):
         target.__init__ = wrapped_init
 
 
-class C_DeepSeekV4SingleKVPoolHook(BaseHook):
-    HOOK_CLASS_NAME = "DeepSeekV4SingleKVPool"
-    HOOK_MODULE_NAME = "sglang.srt.mem_cache.deepseek_v4_memory_pool"
+class C_PackedSingleKVPoolHook(BaseHook):
+    """Allocate byte-packed single KV pools from their runtime geometry."""
+
+    HOOK_CLASS_NAME = r".*SingleKVPool$"
+    HOOK_MODULE_NAME = r"^sglang\.srt\.mem_cache\..+$"
+    REGEX = True
 
     @classmethod
     def hook(cls, target):
-        def ceil_div(x: int, y: int) -> int:
-            return (x + y - 1) // y
+        original_create_buffer = target.create_buffer
 
-        def override_create_buffer(self, *, num_pages: int):
+        def wrapped_create_buffer(self, *, num_pages: int):
+            if self.store_dtype != torch.uint8 or not hasattr(
+                self, "get_bytes_per_token"
+            ):
+                return original_create_buffer(self, num_pages=num_pages)
+
+            try:
+                return original_create_buffer(self, num_pages=num_pages)
+            except AssertionError:
+                # Some packed pools validate production-only geometry. Simulation
+                # still needs a correctly sized byte buffer for dummy model configs.
+                pass
+
             bytes_per_token = self.get_bytes_per_token()
             self.kv_cache_total_dim = bytes_per_token
             bytes_per_page = self.page_size * bytes_per_token
-            self.bytes_per_page_padded = ceil_div(bytes_per_page, 576) * 576
-            if self.store_dtype != torch.uint8:
-                raise ValueError("DeepSeekV4 cache storage must use uint8.")
+            self.bytes_per_page_padded = (bytes_per_page + 575) // 576 * 576
             return torch.zeros(
                 num_pages,
                 self.bytes_per_page_padded,
@@ -257,25 +322,7 @@ class C_DeepSeekV4SingleKVPoolHook(BaseHook):
                 device=self.device,
             )
 
-        target.create_buffer = override_create_buffer
-
-
-class C_DeepSeekV4PagedHostPoolHook(BaseHook):
-    HOOK_CLASS_NAME = "DeepSeekV4PagedHostPool"
-    HOOK_MODULE_NAME = "sglang.srt.mem_cache.memory_pool_host"
-
-    @classmethod
-    def hook(cls, target):
-        _install_transport_methods(target)
-
-
-class C_DeepSeekV4StateHostPoolHook(BaseHook):
-    HOOK_CLASS_NAME = "DeepSeekV4StateHostPool"
-    HOOK_MODULE_NAME = "sglang.srt.mem_cache.memory_pool_host"
-
-    @classmethod
-    def hook(cls, target):
-        _install_transport_methods(target)
+        target.create_buffer = wrapped_create_buffer
 
 
 class C_GenericHostKVCacheSubclassHook(BaseHook):

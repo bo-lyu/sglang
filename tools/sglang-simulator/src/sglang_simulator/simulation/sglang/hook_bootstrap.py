@@ -10,6 +10,7 @@ from sglang_simulator.simulation.sglang import (
     model_runner,
     scheduler,
     sgl_kernel_hook,
+    unified_radix_cache,
 )
 
 # A spawned worker imports this module while unpickling its target. ModelConfig
@@ -39,13 +40,13 @@ def install_simulator_hooks() -> None:
             model_runner.C_KVCacheConfiguratorHook,
             hicache_storage.C_StorageBackendFactory,
             cache_controller.C_HiCacheController,
+            cache_controller.C_HybridCacheController,
             hiradix_cache.C_HiRadixCacheHook,
+            unified_radix_cache.C_UnifiedRadixCacheHook,
             mem_cache_allocator.C_PagedTokenToKVPoolAllocatorHook,
             mem_pool_host.C_MHATokenToKVPoolHostHook,
             mem_pool_host.C_HostKVCacheHook,
-            mem_pool_host.C_DeepSeekV4SingleKVPoolHook,
-            mem_pool_host.C_DeepSeekV4PagedHostPoolHook,
-            mem_pool_host.C_DeepSeekV4StateHostPoolHook,
+            mem_pool_host.C_PackedSingleKVPoolHook,
             mem_pool_host.C_GenericHostKVCacheSubclassHook,
         ]
     )

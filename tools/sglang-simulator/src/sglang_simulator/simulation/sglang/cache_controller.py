@@ -277,3 +277,35 @@ class C_HiCacheController(BaseHook):
         target.storage_hit_query = wrapped_storage_hit_query
         if hasattr(target, "_storage_hit_query"):
             target._storage_hit_query = wrapped_storage_hit_query
+
+
+class C_HybridCacheController(BaseHook):
+    """Adapt UnifiedRadixCache's controller without duplicating legacy logic."""
+
+    HOOK_CLASS_NAME = "HybridCacheController"
+    HOOK_MODULE_NAME = "sglang.srt.mem_cache.hybrid_cache.hybrid_cache_controller"
+
+    @classmethod
+    def hook(cls, target):
+        # HybridCacheController inherits the deterministic thread replacements and
+        # handle_* methods installed on HiCacheController. Its own initialization
+        # creates Unified's control queues after the base initializer returns.
+        original_init = target.__init__
+        original_storage_hit_query = target._storage_hit_query
+
+        def wrapped_init(self, *args, **kwargs):
+            result = original_init(self, *args, **kwargs)
+            if hasattr(self, "prefetch_hit_queue") and not hasattr(
+                self, "prefetch_buffer"
+            ):
+                self.prefetch_buffer = Queue()
+            return result
+
+        def wrapped_storage_hit_query(self, operator):
+            result = original_storage_hit_query(self, operator)
+            req_stats = request_stats_manager.get_req_stats(operator.request_id)
+            req_stats.recv_storage_hit_len = result[1]
+            return result
+
+        target.__init__ = wrapped_init
+        target._storage_hit_query = wrapped_storage_hit_query
