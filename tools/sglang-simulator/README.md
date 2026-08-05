@@ -68,13 +68,16 @@ traffic, and collecting metrics.
 
 ## Serving mode
 
-Set the simulator mode and output directory before starting the server:
+Choose a fresh output directory and export it in the server terminal before
+starting the server:
 
 ```bash
 export SGLANG_USE_CPU_ENGINE=1
 export CUDA_VISIBLE_DEVICES=""
 export SGLANG_SIMULATOR_OUTPUT_MODE=OFFLINE
-export SGLANG_SIMULATOR_OUTPUT_DIR=/tmp/sglang-simulator-serving
+export SIMULATOR_OUTPUT_DIR=/tmp/sglang-simulator-serving-001
+test ! -e "$SIMULATOR_OUTPUT_DIR"
+export SGLANG_SIMULATOR_OUTPUT_DIR="$SIMULATOR_OUTPUT_DIR"
 
 python3 -m sglang_simulator.simulation.sglang.launch_server \
   --model-path /absolute/path/to/model \
@@ -82,9 +85,13 @@ python3 -m sglang_simulator.simulation.sglang.launch_server \
   --port 30000
 ```
 
-Send timestamped traffic with the simulator-aware benchmark adapter:
+In the benchmark terminal, export the same output directory before sending
+timestamped traffic with the simulator-aware benchmark adapter:
 
 ```bash
+export SIMULATOR_OUTPUT_DIR=/tmp/sglang-simulator-serving-001
+export SGLANG_SIMULATOR_OUTPUT_DIR="$SIMULATOR_OUTPUT_DIR"
+
 python3 -m sglang_simulator.simulation.bench_serving \
   --simulator-mode offline \
   --backend sglang \
@@ -95,8 +102,17 @@ python3 -m sglang_simulator.simulation.bench_serving \
   --use-trace-timestamps \
   --num-prompts 100 \
   --warmup-requests 0 \
-  --profile
+  --profile \
+  --output-file "$SIMULATOR_OUTPUT_DIR/benchmark.json"
 ```
+
+The server and benchmark are separate processes, so exporting
+`SGLANG_SIMULATOR_OUTPUT_DIR` in the server terminal does not configure the
+benchmark terminal. The benchmark adapter reads `metrics.json` from this path
+after profiling and uses those server-side logical-time metrics for its serving
+table and output file. If the benchmark points at another directory, it may show
+unrelated stale metrics or client wall-clock values. Use the same fresh path in
+both terminals for every run.
 
 Server options are normal SGLang command-line arguments. For direct Python
 integration, see
@@ -112,7 +128,10 @@ process/HTTP path, see
 | `BLOCKING` | Sleeps for predicted forward and visible L2-to-L1 load latency. |
 
 Use server-side simulator metrics for comparisons. Client wall-clock duration is
-not the simulated timeline in `OFFLINE` mode.
+not the simulated timeline in `OFFLINE` mode. When using the benchmark adapter,
+make sure its `SGLANG_SIMULATOR_OUTPUT_DIR` matches the server's output directory
+so the printed table and `benchmark.json` are sourced from the current run's
+`metrics.json`.
 
 ## Configuration
 

@@ -5,8 +5,6 @@ The example assets are organized by purpose:
 - `sim_configs/`: standalone AIC SOL, AIC SILICON, ML, and replay simulator configs;
 - `assets/`: the small illustrative ML model, replay table, and test tokenizer;
 - `workloads/`: ShareGPT and timestamped simulator/Autobench workload examples;
-- `replay/`: deterministic replay config, table, and trace inputs for custom runner
-  integrations.
 
 The ML model is an illustrative constant-latency sklearn model, not a calibrated
 hardware predictor. Rebuild it and the tokenizer with:
