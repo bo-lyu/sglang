@@ -353,6 +353,10 @@ class C_SchedulerHook(BaseHook):
             # v0.5.16 returns NextBatchPlan instead of ScheduleBatch directly.
             new_batch = getattr(result, "batch_to_run", result)
 
+            # NextBatchPlan carries the running batch as a return value.  self.running_batch
+            # is not updated until get_new_batch_prefill() returns to the scheduler.
+            running_batch = getattr(result, "running_batch", self.running_batch)
+
             now = time.time()
             if new_batch is not None:
                 for req in new_batch.reqs:
@@ -366,7 +370,7 @@ class C_SchedulerHook(BaseHook):
                     else:
                         # Chunked request
                         pass
-            elif len(self.running_batch.reqs) == 0 and len(self.waiting_queue) > 0:
+            elif len(running_batch.reqs) == 0 and len(self.waiting_queue) > 0:
                 # Prefetching
                 StateManager.step_global_clock(0.005)
                 StateManager.set_current_inference_dur(0.005)
@@ -374,7 +378,7 @@ class C_SchedulerHook(BaseHook):
                 # Idle stage, there are some requests pendding in the future queue.
                 if C_SchedulerHook.SIM_MODE == SimulationMode.OFFLINE and (
                     C_SchedulerHook.REQ_DISPATCHER.has_next()
-                    and len(self.running_batch.reqs) == 0
+                    and len(running_batch.reqs) == 0
                 ):
                     next_created_time = (
                         C_SchedulerHook.REQ_DISPATCHER.next_req_from_future_ts()

@@ -21,7 +21,8 @@ SIM_CONFIGS = {
 
 
 class SGLangServingRunner:
-    def __init__(self, config_path: Path, tmp_path: Path):
+    def __init__(self, config_path: Path, tmp_path: Path, mode: str = "offline"):
+        self.mode = mode
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             self.port = sock.getsockname()[1]
@@ -32,7 +33,7 @@ class SGLangServingRunner:
             CUDA_VISIBLE_DEVICES="",
             SGLANG_USE_CPU_ENGINE="1",
             SGLANG_SIMULATOR_CONFIG_PATH=str(config_path),
-            SGLANG_SIMULATOR_OUTPUT_MODE="OFFLINE",
+            SGLANG_SIMULATOR_OUTPUT_MODE=mode.upper(),
             SGLANG_SIMULATOR_OUTPUT_DIR=str(self.output_dir),
         )
         cmd = [
@@ -70,12 +71,18 @@ class SGLangServingRunner:
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
-    def benchmark(self, output_file: Path, workload: str = "sharegpt") -> dict:
+    def benchmark(
+        self,
+        output_file: Path,
+        workload: str = "sharegpt",
+        request_rate=None,
+        seed=42,
+    ) -> dict:
         cmd = [
             sys.executable,
             "-m",
             "sglang_simulator.simulation.bench_serving",
-            "--simulator-mode=offline",
+            f"--simulator-mode={self.mode}",
             "--backend=sglang",
             f"--base-url={self.base_url}",
             "--warmup-requests=0",
@@ -86,6 +93,9 @@ class SGLangServingRunner:
             "--profile",
             f"--output-file={output_file}",
         ]
+        if request_rate is not None:
+            cmd.extend([f"--request-rate={request_rate}", f"--seed={seed}"])
+
         if workload == "sharegpt":
             cmd.extend(
                 [
