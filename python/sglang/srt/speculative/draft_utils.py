@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sglang.srt.runtime_context import attention_backends, get_spec
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils.common import (
@@ -43,7 +45,11 @@ class DraftBackendFactory:
         self.draft_attn_backend = draft_model_runner.draft_attention_backend
 
     def _create_backend(
-        self, backend_name: str, backend_map: dict, error_template: str
+        self,
+        backend_name: str,
+        backend_map: dict,
+        error_template: str,
+        stamp_overrides: Optional[dict] = None,
     ):
         # `attention_backends()` is the split pair with the base-backend
         # fallback already applied, which is exactly what the two names this
@@ -60,7 +66,26 @@ class DraftBackendFactory:
         if backend_type not in backend_map:
             raise ValueError(error_template.format(backend_type=backend_type))
 
-        return backend_map[backend_type]()
+        backend = backend_map[backend_type]()
+        if backend is not None:
+            # The runner-stamped pair, like `build_attention_backends` sets on
+            # the runner's own backend: these products replace the draft
+            # runner's backend (or serve one draft phase), and readers that
+            # assemble backend-specific kwargs (`serving_attention_backend`)
+            # prefer the stamp over the process pair -- a draft override must
+            # win there too. The stamp is the *effective* kernel, which the
+            # caller's map can rename (cutedsl_mla draft-extend falls back to
+            # the trtllm-mla constructor, so its stamp says trtllm_mla).
+            stamp = (stamp_overrides or {}).get(backend_type, backend_type)
+            backend.prefill_attention_backend_str = stamp
+            backend.decode_attention_backend_str = stamp
+            # Multi-step containers put their per-step children into the
+            # ForwardContext directly (eagle's eager loop), so the children
+            # need the stamp as much as the container.
+            for child in getattr(backend, "attn_backends", ()) or ():
+                child.prefill_attention_backend_str = stamp
+                child.decode_attention_backend_str = stamp
+        return backend
 
     def create_decode_backend(self):
         # No multi-step draft backend for steps=0 (nospec) or steps=1.
@@ -125,13 +150,24 @@ class DraftBackendFactory:
             backend_name,
             backend_map,
             "EAGLE is not supported in attention backend {backend_type}",
+            stamp_overrides={"cutedsl_mla": "trtllm_mla"},
         )
         # A draft with conv layers of its own (Inkling) needs its sidecar here too.
         from sglang.srt.layers.attention.attention_registry import (
             attn_backend_wrapper_for_draft_extend,
         )
 
-        return attn_backend_wrapper_for_draft_extend(self.draft_model_runner, backend)
+        wrapped = attn_backend_wrapper_for_draft_extend(
+            self.draft_model_runner, backend
+        )
+        if wrapped is not backend and wrapped is not None and backend is not None:
+            # The wrapper is what enters the ForwardContext; it must answer
+            # with the wrapped backend's stamp.
+            wrapped.prefill_attention_backend_str = (
+                backend.prefill_attention_backend_str
+            )
+            wrapped.decode_attention_backend_str = backend.decode_attention_backend_str
+        return wrapped
 
     def _create_dsa_decode_backend(self):
         from sglang.srt.layers.attention.dsa_backend import (
