@@ -438,6 +438,14 @@ pub enum CacheAwareDecision {
     /// router's per-worker cap is excluded upstream and lands there. Read the
     /// two together when attributing locality loss to load.
     CacheWorkerQueued,
+    /// Every prefix owner was over `--worker-queue-limit`, an UNQUEUED
+    /// alternative existed, and rather than spilling to a cold min-load worker
+    /// the request was routed to an unqueued worker that still holds a
+    /// *shallower* piece of the prefix. Distinct from [`Self::CacheWorkerQueued`]
+    /// (spilled to zero overlap) so the two spill outcomes can be told apart:
+    /// this one preserved some cache, that one forfeited all of it. The blocks
+    /// preserved land in `sgl_router_diverted_overlap_blocks` under this label.
+    CacheWorkerSpilledOverlap,
     /// The fleet-saturation label; which selection it describes depends on
     /// whether `--saturation-queue-floor` is set.
     ///
@@ -479,6 +487,7 @@ impl CacheAwareDecision {
             Self::MatchedNodeUnowned => "matched_node_unowned",
             Self::MatchedWorkersIneligible => "matched_workers_ineligible",
             Self::CacheWorkerQueued => "cache_worker_queued",
+            Self::CacheWorkerSpilledOverlap => "cache_worker_spilled_overlap",
             Self::CacheHitAllQueued => "cache_hit_all_queued",
         }
     }
