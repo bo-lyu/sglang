@@ -27,6 +27,11 @@ class C_ModelRunnerHook(BaseHook):
             )
 
             self.model = _MockModel()
+            self.model.config = getattr(self.model_config, "hf_text_config", None) or getattr(
+                self.model_config, "hf_config", None
+            )
+            self.model.layers = torch.nn.ModuleList()
+
             self.dtype = self.model_config.dtype
             self.sliding_window_size = resolve_sliding_window_size(
                 self.model, self.model_config

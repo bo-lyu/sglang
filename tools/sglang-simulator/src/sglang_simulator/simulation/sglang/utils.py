@@ -58,6 +58,12 @@ def resolve_model_info(model_config: "ModelConfig") -> ModelInfo:
             num_key_value_heads=model_config.num_key_value_heads,
             v_head_dim=model_config.v_head_dim,
             vocab_size=model_config.vocab_size,
+            # MoE and architecture-specific parameters (e.g. GLM-5.3-Flash, DeepSeek).
+            # Using getattr() safely returns None on dense architectures without AttributeError.
+            intermediate_size=getattr(model_config, "intermediate_size", None),
+            num_experts=getattr(model_config, "num_experts", None),
+            num_experts_per_tok=getattr(model_config, "num_experts_per_tok", None),
+            moe_intermediate_size=getattr(model_config, "moe_intermediate_size", None),
             # DSv4-style models (e.g. DSv4-Pro) report attention_arch=MHA because
             # sglang routes them through a custom `attention_backend='dsv4'`, not
             # MLA. But they still carry compress_ratios + indexer + SWA fields on
@@ -83,6 +89,10 @@ def resolve_model_info(model_config: "ModelConfig") -> ModelInfo:
             num_key_value_heads=model_config.num_key_value_heads,
             v_head_dim=model_config.v_head_dim,
             vocab_size=model_config.vocab_size,
+            intermediate_size=getattr(model_config, "intermediate_size", None),
+            num_experts=getattr(model_config, "num_experts", None),
+            num_experts_per_tok=getattr(model_config, "num_experts_per_tok", None),
+            moe_intermediate_size=getattr(model_config, "moe_intermediate_size", None),
             qk_rope_head_dim=model_config.qk_rope_head_dim,
             qk_nope_head_dim=model_config.qk_nope_head_dim,
             kv_lora_rank=model_config.kv_lora_rank,

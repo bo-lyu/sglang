@@ -170,13 +170,15 @@ def _init_cpu_threads_env(
     *, tp_size: int, tp_rank: int, local_omp_cpuid: Optional[List[int]]
 ) -> None:
     if _is_cpu_amx_available or _is_cpu_arm64:
-        # Bind OpenMP threads to CPU cores
-        torch.ops.sgl_kernel.init_cpu_threads_env(local_omp_cpuid)
+        try:
+            # Bind OpenMP threads to CPU cores
+            torch.ops.sgl_kernel.init_cpu_threads_env(local_omp_cpuid)
 
-        # Set local size to hint SGLang to use shared memory based AllReduce
-        os.environ["LOCAL_SIZE"] = str(tp_size)
-        torch.ops.sgl_kernel.initialize(tp_size, tp_rank)
-
+            # Set local size to hint SGLang to use shared memory based AllReduce
+            os.environ["LOCAL_SIZE"] = str(tp_size)
+            torch.ops.sgl_kernel.initialize(tp_size, tp_rank)
+        except Exception as e:
+            logger.warning(f"Failed to initialize CPU threads env via sgl_kernel: {e}")
     else:
         logger.warning(
             "init_cpu_threads_env and shared memory based AllReduce is disabled, only intel amx backend and arm64 are supported"

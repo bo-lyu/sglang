@@ -32,13 +32,18 @@ class ModelInfo:
 
     torch_dtype: Optional[str] = None
 
-    # deepseek v4 model config
-    qk_nope_head_dim: Optional[int] = None
-    qk_rope_head_dim: Optional[int] = None
-    indexer_head_dim: Optional[int] = None
+    # MoE and architecture-specific MLP dimensions (e.g. GLM-5.3-Flash, DeepSeek MoE)
+    intermediate_size: Optional[int] = None  # Dense FFN intermediate dimension
+    num_experts: Optional[int] = None  # Total number of routed experts (e.g. 64)
+    num_experts_per_tok: Optional[int] = None  # Top-K active experts per token (e.g. 4)
+    moe_intermediate_size: Optional[int] = None  # Single expert intermediate dimension (e.g. 2048)
 
     def is_mla(self) -> bool:
         return self.attention_arch == "MLA"
 
     def is_dsv4(self) -> bool:
         return self.compression_ratios is not None
+
+    def is_moe(self) -> bool:
+        """Whether the model employs Mixture-of-Experts routing."""
+        return self.num_experts is not None and self.num_experts > 0
