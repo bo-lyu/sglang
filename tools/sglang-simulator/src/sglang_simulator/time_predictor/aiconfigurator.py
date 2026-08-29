@@ -1,7 +1,7 @@
 from typing import Optional
 
 import numpy as np
-from aiconfigurator.sdk import models
+from aiconfigurator.sdk import common, models
 from aiconfigurator.sdk.backends.factory import get_backend
 from aiconfigurator.sdk.common import (
     CommQuantMode,
@@ -12,6 +12,12 @@ from aiconfigurator.sdk.common import (
     MoEQuantMode,
 )
 from aiconfigurator.sdk.config import ModelConfig, RuntimeConfig
+
+# Ensure GLM-5.3-Flash and GLM-4 MoE architectures map to the MoE performance model family
+if "GLM53FlashForCausalLM" not in common.ARCHITECTURE_TO_MODEL_FAMILY:
+    common.ARCHITECTURE_TO_MODEL_FAMILY["GLM53FlashForCausalLM"] = "MOE"
+if "Glm4MoeForCausalLM" not in common.ARCHITECTURE_TO_MODEL_FAMILY:
+    common.ARCHITECTURE_TO_MODEL_FAMILY["Glm4MoeForCausalLM"] = "MOE"
 from aiconfigurator.sdk.inference_session import InferenceSession
 from aiconfigurator.sdk.perf_database import get_database, get_systems_paths
 from sglang_simulator.simulation.types import (
@@ -265,7 +271,43 @@ class AIConfiguratorTimePredictor(InferTimePredictor):
                     mode="static_ctx",
                 )
                 latency_dict = results[0]
+
+        logger.info(self.format_stage_breakdown(latency_dict, batch.is_decode(), batch.batch_size, isl))
         return latency_dict
+
+    def format_stage_breakdown(self, latency_dict: dict, is_decode: bool, batch_size: int, isl: int) -> str:
+        mode = "generation" if is_decode else "context"
+        num_layers = getattr(self.model, "num_hidden_layers", 48)
+        num_experts = getattr(self.model, "num_experts", 64) or 64
+        topk = getattr(self.model, "num_experts_per_tok", 4) or 4
+
+        emb_lat = latency_dict.get(f"{mode}_embedding", 0) + latency_dict.get(f"{mode}_embedding_ar", 0)
+        attn_lat = (
+            latency_dict.get(f"{mode}_add_norm_1", 0)
+            + latency_dict.get(f"{mode}_qkv_gemm", 0)
+            + latency_dict.get(f"{mode}_attention", 0)
+            + latency_dict.get(f"{mode}_proj_gemm", 0)
+            + latency_dict.get(f"{mode}_add_norm_2", 0)
+        )
+        router_lat = latency_dict.get(f"{mode}_router_gemm", 0)
+        dispatch_lat = (
+            latency_dict.get(f"{mode}_moe_pre_dispatch", 0)
+            + latency_dict.get(f"{mode}_moe_post_dispatch", 0)
+        )
+        moe_ffn_lat = latency_dict.get(f"{mode}_moe", 0)
+        logits_lat = latency_dict.get(f"{mode}_logits_gemm", 0)
+        total_lat = sum(latency_dict.values())
+
+        lines = [
+            f"~ 5.1 [AIConfigurator] Stage 1 (Embedding & AR): {emb_lat:.4f} ms -> Computed: Tokens ({isl}) * Hidden ({getattr(self.model, 'hidden_size', 4096)}) * 2B / HBM_BW + NVLink TP All-Reduce",
+            f"~ 5.2 [AIConfigurator] Stage 2 (Attention x {num_layers} layers): {attn_lat:.4f} ms -> Computed: {num_layers}x (RMSNorm + QKV Projection GEMM + FMHA/GQA Attention + Out-Proj GEMM)",
+            f"~ 5.3 [AIConfigurator] Stage 3 (MoE Routing & All-to-All Comm): {router_lat + dispatch_lat:.4f} ms -> Computed: Router GEMM ({num_experts} experts) + Top-{topk} Token All-to-All Dispatch/Collect",
+            f"~ 5.4 [AIConfigurator] Stage 4 (MoE Expert FFN GEMMs): {moe_ffn_lat:.4f} ms -> Computed: {num_layers}x Top-{topk} Active Expert SwiGLU GEMMs across GPU Tensor Cores",
+        ]
+        if logits_lat > 0:
+            lines.append(f"~ 5.5 [AIConfigurator] Stage 5 (Logits Head): {logits_lat:.4f} ms -> Computed: Vocab Projection GEMM ({getattr(self.model, 'vocab_size', 151552)} / TP)")
+        lines.append(f"~ 5.6 [AIConfigurator] Total Predicted Forward Latency: {total_lat:.4f} ms (mode={'decode' if is_decode else 'prefill'}, batch_size={batch_size}, tokens={isl})")
+        return "\n".join(lines)
 
     def predict_infer_time(self, batch: ScheduleBatch) -> float:
         latency_dict = self.predict_infer_latency_dict(batch)

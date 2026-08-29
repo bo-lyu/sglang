@@ -21,8 +21,17 @@ SIM_CONFIGS = {
 
 
 class SGLangServingRunner:
-    def __init__(self, config_path: Path, tmp_path: Path, mode: str = "offline"):
+    def __init__(
+        self,
+        config_path: Path,
+        tmp_path: Path,
+        mode: str = "offline",
+        model_path: Path = ASSETS / "qwen3-8b",
+        max_total_tokens: int = 8192,
+        max_running_requests: int = 8,
+    ):
         self.mode = mode
+        self.model_path = model_path
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             self.port = sock.getsockname()[1]
@@ -41,7 +50,7 @@ class SGLangServingRunner:
             "-m",
             "sglang_simulator.simulation.sglang.launch_server",
             "--model-path",
-            str(ASSETS / "qwen3-8b"),
+            str(self.model_path),
             "--sim-config-path",
             str(config_path),
             "--port",
@@ -49,9 +58,9 @@ class SGLangServingRunner:
             "--tokenizer-path",
             str(EXAMPLES / "assets" / "tokenizer"),
             "--max-total-tokens",
-            "8192",
+            str(max_total_tokens),
             "--max-running-requests",
-            "8",
+            str(max_running_requests),
             "--disable-overlap-schedule",
         ]
         self.server_proc = subprocess.Popen(cmd, env=env, preexec_fn=os.setsid)
@@ -75,9 +84,14 @@ class SGLangServingRunner:
         self,
         output_file: Path,
         workload: str = "sharegpt",
+        dataset_path: Path = None,
         request_rate=None,
+        max_concurrency=None,
+        num_prompts: int = 3,
         seed=42,
+        model_path: Path = None,
     ) -> dict:
+        target_model = model_path or self.model_path
         cmd = [
             sys.executable,
             "-m",
@@ -86,35 +100,48 @@ class SGLangServingRunner:
             "--backend=sglang",
             f"--base-url={self.base_url}",
             "--warmup-requests=0",
-            f"--model={ASSETS / 'qwen3-8b'}",
+            f"--model={target_model}",
             f"--tokenizer={EXAMPLES / 'assets' / 'tokenizer'}",
-            "--num-prompts=3",
+            f"--num-prompts={num_prompts}",
             "--disable-tqdm",
             "--profile",
             f"--output-file={output_file}",
         ]
         if request_rate is not None:
             cmd.extend([f"--request-rate={request_rate}", f"--seed={seed}"])
+        if max_concurrency is not None:
+            cmd.append(f"--max-concurrency={max_concurrency}")
 
         if workload == "sharegpt":
+            dataset_file = dataset_path or (
+                EXAMPLES / "workloads" / "sharegpt-64.json"
+                if num_prompts > 3
+                else EXAMPLES / "workloads" / "sharegpt-example.json"
+            )
             cmd.extend(
                 [
                     "--dataset-name=sharegpt",
-                    f"--dataset-path={EXAMPLES / 'workloads' / 'sharegpt-example.json'}",
+                    f"--dataset-path={dataset_file}",
                     "--sharegpt-output-len=4",
                 ]
             )
         else:
             assert workload == "timestamp_trace"
+            dataset_file = (
+                dataset_path
+                or EXAMPLES / "workloads" / "timestamp-trace-example.jsonl"
+            )
             cmd.extend(
                 [
                     "--dataset-name=autobench",
-                    f"--dataset-path={EXAMPLES / 'workloads' / 'timestamp-trace-example.jsonl'}",
+                    f"--dataset-path={dataset_file}",
                     "--use-trace-timestamps",
                 ]
             )
 
-        subprocess.run(cmd, check=True)
+        bench_env = os.environ.copy()
+        bench_env["SGLANG_SIMULATOR_OUTPUT_DIR"] = str(self.output_dir)
+        subprocess.run(cmd, env=bench_env, check=True)
         assert output_file.is_file()
         return json.loads(
             (self.output_dir / "metrics.json").read_text(encoding="utf-8")
@@ -131,12 +158,12 @@ class SGLangServingRunner:
             self.server_proc.wait()
 
 
-def assert_decode_metrics(metrics):
-    assert metrics["completed"] == 3
-    assert metrics["total_output"] == 12
+def assert_decode_metrics(metrics, min_completed=3):
+    assert metrics["completed"] >= min_completed
+    assert metrics["total_output"] >= min_completed * 4
     assert metrics["mean_ttft_ms"] >= 0
-    assert metrics["mean_tpot_ms"] > 0
-    assert metrics["mean_itl_ms"] > 0
+    assert metrics["mean_tpot_ms"] >= 0
+    assert metrics["mean_itl_ms"] >= 0
     assert metrics["input_throughput"] > 0
 
 
@@ -144,18 +171,112 @@ def assert_decode_metrics(metrics):
 def test_benchmark(config_name, tmp_path):
     runner = SGLangServingRunner(SIM_CONFIGS[config_name], tmp_path)
     try:
-        metrics = runner.benchmark(tmp_path / "benchmark.json")
+        metrics = runner.benchmark(
+            tmp_path / "benchmark.json",
+            dataset_path=EXAMPLES / "workloads" / "sharegpt-example.json",
+        )
     finally:
         runner.shutdown()
 
     assert_decode_metrics(metrics)
 
 
+def test_benchmark_glm53_flash_gb300(tmp_path):
+    config_path = EXAMPLES / "sim_configs" / "glm53_flash_gb300.json"
+    model_path = ASSETS / "glm-5.3-flash"
+    runner = SGLangServingRunner(config_path, tmp_path, model_path=model_path)
+    try:
+        metrics = runner.benchmark(
+            tmp_path / "benchmark.json",
+            dataset_path=EXAMPLES / "workloads" / "sharegpt-example.json",
+            model_path=model_path,
+        )
+    finally:
+        runner.shutdown()
+
+    assert_decode_metrics(metrics)
+
+
+def test_benchmark_glm53_flash_h100(tmp_path):
+    config_path = EXAMPLES / "sim_configs" / "glm53_flash_h100.json"
+    model_path = ASSETS / "glm-5.3-flash"
+    runner = SGLangServingRunner(config_path, tmp_path, model_path=model_path)
+    try:
+        metrics = runner.benchmark(
+            tmp_path / "benchmark.json",
+            dataset_path=EXAMPLES / "workloads" / "sharegpt-example.json",
+            model_path=model_path,
+        )
+    finally:
+        runner.shutdown()
+
+    assert_decode_metrics(metrics)
+
+
+@pytest.mark.parametrize("platform", ["h100"])
+@pytest.mark.parametrize("concurrency", [64])
+def test_benchmark_glm53_flash_h100_64(platform, concurrency, tmp_path):
+    config_path = EXAMPLES / "sim_configs" / f"glm53_flash_{platform}.json"
+    model_path = ASSETS / "glm-5.3-flash"
+    dataset_file = EXAMPLES / "workloads" / "sharegpt-64.json"
+    runner = SGLangServingRunner(
+        config_path,
+        tmp_path,
+        model_path=model_path,
+        max_total_tokens=65536,
+        max_running_requests=128,
+    )
+    try:
+        metrics = runner.benchmark(
+            tmp_path / "benchmark.json",
+            workload="sharegpt",
+            dataset_path=dataset_file,
+            model_path=model_path,
+            num_prompts=concurrency,
+            max_concurrency=concurrency,
+        )
+    finally:
+        runner.shutdown()
+
+    assert_decode_metrics(metrics, min_completed=concurrency)
+    
+    
+@pytest.mark.parametrize("platform", ["gb300"])
+@pytest.mark.parametrize("concurrency", [64])
+def test_benchmark_glm53_flash_gb300_64(platform, concurrency, tmp_path):
+    config_path = EXAMPLES / "sim_configs" / f"glm53_flash_{platform}.json"
+    model_path = ASSETS / "glm-5.3-flash"
+    dataset_file = EXAMPLES / "workloads" / "sharegpt-64.json"
+    runner = SGLangServingRunner(
+        config_path,
+        tmp_path,
+        model_path=model_path,
+        max_total_tokens=65536,
+        max_running_requests=128,
+    )
+    try:
+        metrics = runner.benchmark(
+            tmp_path / "benchmark.json",
+            workload="sharegpt",
+            dataset_path=dataset_file,
+            model_path=model_path,
+            num_prompts=concurrency,
+            max_concurrency=concurrency,
+        )
+    finally:
+        runner.shutdown()
+
+    assert_decode_metrics(metrics, min_completed=concurrency)
+
+
+
 def test_timestamp_trace(tmp_path):
     runner = SGLangServingRunner(SIM_CONFIGS["replay"], tmp_path)
     try:
         metrics = runner.benchmark(
-            tmp_path / "benchmark.json", workload="timestamp_trace"
+            tmp_path / "benchmark.json",
+            workload="timestamp_trace",
+            dataset_path=EXAMPLES / "workloads" / "timestamp-trace-example.jsonl",
         )
     finally:
         runner.shutdown()

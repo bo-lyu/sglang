@@ -3889,6 +3889,8 @@ def parse_lscpu_topology():
         output = subprocess.check_output(
             ["lscpu", "-p=CPU,Core,Socket,Node"], text=True
         )
+    except FileNotFoundError:
+        return []
     except Exception as e:
         raise RuntimeError(f"Unexpected error running 'lscpu': {e}")
 
@@ -3925,7 +3927,11 @@ def get_physical_cpus_by_numa():
             ] = cpu  # pick first CPU seen for that physical core
 
     # Retrieves CPUs that the current process is allowed to run on
-    cpus_allowed_list = psutil.Process().cpu_affinity()
+    process = psutil.Process()
+    if hasattr(process, "cpu_affinity"):
+        cpus_allowed_list = process.cpu_affinity()
+    else:
+        cpus_allowed_list = list(range(psutil.cpu_count() or 1))
 
     # Convert to list of physical CPUs per node
     # 0: [0,1,2,...,42]
@@ -3945,6 +3951,10 @@ def get_physical_cpus_by_numa():
 # Only physical cores are used. Logical cores are excluded.
 def get_cpu_ids_by_node():
     node_to_cpus = get_physical_cpus_by_numa()
+    if not node_to_cpus:
+        # Fallback for systems without NUMA / lscpu (e.g. macOS): treat as single node
+        total_cpus = list(range(psutil.cpu_count(logical=False) or psutil.cpu_count() or 1))
+        return [",".join(map(str, total_cpus))]
     # Sort by NUMA node index
     cpu_ids = [
         ",".join(map(str, sorted(node_to_cpus[node]))) for node in sorted(node_to_cpus)

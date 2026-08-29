@@ -73,6 +73,13 @@ class C_SglangPrefillAdderHook(BaseHook):
             req_infos.before_adder_device_hit_len = len(req.prefix_indices)
             req_infos.final_host_hit_len = req.host_hit_length
 
+            logger.info(
+                "~~ 2.0 [PrefillAdder] Request admitted to scheduler: rid=%s, cached_tokens=%d, host_hit_tokens=%d",
+                req.rid,
+                len(req.prefix_indices),
+                req.host_hit_length,
+            )
+
             return original_add_one_req(self, *args, **kwargs)
 
         target.add_one_req = wrapped_add_one_req
@@ -101,6 +108,8 @@ class ReqDispatcher:
         )  # tuple(created time, salt, request)
         self.offline_recv_all_requests = False
         self.profile_active = False
+
+        self._salt_counter = 0
 
     @staticmethod
     def simulation_created_time_s(simulation_args: dict) -> float:
@@ -133,6 +142,8 @@ class ReqDispatcher:
             for req in reqs:
                 if req.__class__.__name__ == "TokenizedGenerateReqInput":
                     gen_requests.append(req)
+                elif req.__class__.__name__ == "BatchTokenizedGenerateReqInput":
+                    gen_requests.extend(req.batch)
                 else:
                     # Such as: /profile_start, /flush_cache, etc.
                     self.immediate_release_requests.append(req)
@@ -154,11 +165,12 @@ class ReqDispatcher:
                         "Add request to waiting queue with custom queue start timestamp."
                     )
 
+                self._salt_counter += 1
                 self.future_queue.append(
                     (
                         sim_params.get("queue_start")
                         or self.simulation_created_time_s(sim_params),
-                        time.time_ns(),  # The request is not comparable, so add the salt to avoid comparison.
+                        self._salt_counter,
                         req,
                     )
                 )
@@ -232,7 +244,7 @@ class ReqDispatcher:
                         StateManager.set_global_clock(queue_start)
                     req_stats.queue_start = StateManager.get_global_clock()
 
-        if recv_reqs and StateManager.get_last_real_time_ts() == 0:
+        if recv_reqs and StateManager.get_last_real_time_ts() == 0 and (self.mode == SimulationMode.BLOCKING or self.offline_recv_all_requests):
             StateManager.set_last_real_time_ts(time.time())
             StateManager.set_global_clock(
                 now if self.mode == SimulationMode.BLOCKING else 0
@@ -340,6 +352,11 @@ class C_SchedulerHook(BaseHook):
 
         def wrapped_recv_requests(self, *args, **kwargs) -> list:
             recv_reqs = original_recv_requests(self, *args, **kwargs)
+            if recv_reqs:
+                logger.info(
+                    "~~ 1.0 [ReqDispatcher] Received and dispatched requests: #new_requests=%d",
+                    len(recv_reqs),
+                )
             C_SchedulerHook.REQ_DISPATCHER.add(recv_reqs)
             return C_SchedulerHook.REQ_DISPATCHER.dispatch()
 
@@ -359,6 +376,13 @@ class C_SchedulerHook(BaseHook):
 
             now = time.time()
             if new_batch is not None:
+                if new_batch.batch_size() > 0:
+                    logger.info(
+                        "~~ 3.0 [Scheduler] Formed new prefill batch: batch_size=%d, waiting_queue=%d, iteration=%d",
+                        new_batch.batch_size(),
+                        len(self.waiting_queue),
+                        StateManager.get_iteration(),
+                    )
                 for req in new_batch.reqs:
                     req_stats = request_stats_manager.get_req_stats(req.rid)
                     req_stats.final_device_hit_len = req.cached_tokens
@@ -451,6 +475,13 @@ class C_SchedulerHook(BaseHook):
                     )
                     predicted_latency = float(predicted_latency)
 
+                    logger.info(
+                        "~~ 5.0 [AIConfigurator] Predicted forward latency: mode=%s, batch_size=%d, predicted_latency=%.4f ms",
+                        "extend" if batch.forward_mode.is_extend() else "decode",
+                        simulation_batch.batch_size,
+                        predicted_latency * 1000,
+                    )
+
                     forward_latency = 0
                     if C_SchedulerHook.SIM_MODE == SimulationMode.BLOCKING:
                         time.sleep(abs(predicted_latency))
@@ -477,6 +508,13 @@ class C_SchedulerHook(BaseHook):
             if batch is not None:
                 if len(batch.reqs) == 0:
                     return ret
+
+                logger.info(
+                    "~~ 6.0 [Scheduler] Processed batch result and stepped virtual clock: forward_mode=%s, global_clock=%.4f s, current_inference_dur=%.4f s",
+                    batch.forward_mode,
+                    StateManager.get_global_clock(),
+                    StateManager.get_current_inference_dur(),
+                )
 
                 hicache_l2_load_dur = StateManager.pop_hicache_l2_load_dur()
                 hicache_l2_load_stats = StateManager.pop_hicache_l2_load_stats()
@@ -546,11 +584,13 @@ class C_SchedulerHook(BaseHook):
                     }
                 )
             else:
-                now = time.time()
-                StateManager.step_global_clock(
-                    now - StateManager.get_last_real_time_ts()
-                )
-                StateManager.set_last_real_time_ts(now)
+                if C_SchedulerHook.SIM_MODE == SimulationMode.BLOCKING:
+                    now = time.time()
+                    if StateManager.get_last_real_time_ts() != 0:
+                        StateManager.step_global_clock(
+                            now - StateManager.get_last_real_time_ts()
+                        )
+                    StateManager.set_last_real_time_ts(now)
 
             return ret
 
@@ -566,7 +606,7 @@ class C_SchedulerHook(BaseHook):
             output_dir = Envs.output_dir()
             os.makedirs(output_dir, exist_ok=True)
 
-            if len(stats) > 0:
+            if not is_start_profile and len(stats) > 0:
                 min_created_time = stats[0].created_time
                 # Align timestamps
                 for item in stats:
@@ -603,7 +643,7 @@ class C_SchedulerHook(BaseHook):
 
                 except Exception as e:
                     logger.error(f"Failed to dump results. Error: {e}")
-            else:
+            elif not is_start_profile:
                 logger.warning("No request statistics available.")
 
             StateManager.reset()

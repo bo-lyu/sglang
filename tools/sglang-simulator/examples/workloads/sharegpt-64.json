@@ -1,0 +1,770 @@
+[
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 1)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 2)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 3)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 4)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 5)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 6)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 7)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 8)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 9)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 10)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 11)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 12)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 13)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 14)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 15)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 16)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 17)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 18)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 19)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 20)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 21)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 22)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 23)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 24)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 25)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 26)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 27)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 28)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 29)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 30)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 31)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 32)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 33)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 34)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 35)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 36)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 37)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 38)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 39)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 40)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 41)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 42)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 43)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 44)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 45)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 46)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 47)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 48)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 49)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 50)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 51)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 52)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 53)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 54)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 55)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 56)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 57)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 58)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 59)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 60)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 61)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "What does time to first token measure? (query 62)"
+      },
+      {
+        "from": "gpt",
+        "value": "It measures latency from request arrival to the first generated token."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Why does decode latency matter for serving? (query 63)"
+      },
+      {
+        "from": "gpt",
+        "value": "Decode latency determines the cadence at which later tokens reach the user."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "human",
+        "value": "Explain prefix caching in one concise sentence. (query 64)"
+      },
+      {
+        "from": "gpt",
+        "value": "Prefix caching reuses KV states shared by prompt prefixes."
+      }
+    ]
+  }
+]

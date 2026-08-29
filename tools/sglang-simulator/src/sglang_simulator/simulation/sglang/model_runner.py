@@ -6,6 +6,9 @@ from sglang_simulator.simulation.sglang.utils import (
     resolve_scheduler_config,
 )
 from sglang_simulator.simulation.utils import profile_device_available_bytes
+from sglang_simulator.utils import get_logger
+
+logger = get_logger("sgl_simulator")
 
 
 class _MockModel(torch.nn.Module):
@@ -49,6 +52,12 @@ class C_ModelRunnerHook(BaseHook):
             from sglang.srt.layers.logits_processor import LogitsProcessorOutput
             from sglang.srt.model_executor.model_runner import ModelRunnerOutput
 
+            logger.info(
+                "~ 4.0 [ModelRunner] Mock forward executed: batch_size=%d, vocab_size=%d (bypassed GPU weights & CUDA execution)",
+                batch.batch_size,
+                self.model_config.vocab_size,
+            )
+
             output = LogitsProcessorOutput(
                 next_token_logits=torch.empty(
                     size=(batch.batch_size, self.model_config.vocab_size),
@@ -63,6 +72,10 @@ class C_ModelRunnerHook(BaseHook):
 
         def wrapped_sample(self, *args, **kwargs):
             logits = args[0]
+            logger.info(
+                "~ 7.0 [Sampler] Mock sampled token IDs: batch_size=%d, token_id=1",
+                logits.next_token_logits.shape[0],
+            )
             return torch.ones(
                 size=(logits.next_token_logits.shape[0],),
                 device=self.device,
